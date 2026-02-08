@@ -27,22 +27,22 @@ dim i(i_{1:N}) observations
 ### Nodes
 
 ```text
-node <name[dims]> [(<symbol>)] <description> <type> ~ <distribution>
+<type> <name[dims]> [(<symbol>)] <description> [~ <distribution>]
 ```
 
 - `(<symbol>)` is optional; default is `<name>_{<dims>}` when dimensions are present, otherwise `<name>`
 - `type` is one of: `latent`, `observed`, `fixed`, `deterministic`
-- `~ <distribution>` is optional (useful for deterministic/fixed nodes)
+- `~ <distribution>` is optional
 
 Example:
 
 ```text
-node alpha (\alpha) concentration latent ~ N(0,1)
-node theta[k] (\theta_k) weights latent ~ Dirichlet(\alpha)
-node z[i] (z_i) assignments latent ~ Categorical(\theta)
-node x[i] (x_i) "observed values" observed
-node mu (\mu) center fixed
-node y[i] (y_i) transformed deterministic
+latent alpha (\alpha) concentration ~ N(0,1)
+latent theta[k] (\theta_k) weights ~ Dirichlet(\alpha)
+latent z[i] (z_i) assignments ~ Categorical(\theta)
+observed x[i] (x_i) "observed values"
+fixed mu (\mu) center
+deterministic y[i] (y_i) transformed
 ```
 
 ### Edges

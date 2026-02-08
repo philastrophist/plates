@@ -91,19 +91,19 @@
       <textarea id="dsl">dim k components
 dim i observations
 
-node alpha (\alpha) concentration latent ~ N(0,1)
-node theta[k] (\theta_k) weights latent ~ Dirichlet(\alpha)
-node z[i] (z_i) assignments latent ~ Categorical(\theta)
-node x[i] (x_i) "observed values" observed
-node mu (\mu) center fixed
-node y[i] (y_i) transformed deterministic
+latent alpha (\alpha) concentration ~ N(0,1)
+latent theta[k] (\theta_k) weights ~ Dirichlet(\alpha)
+latent z[i] (z_i) assignments ~ Categorical(\theta)
+observed x[i] (x_i) "observed values"
+fixed mu (\mu) center
+deterministic y[i] (y_i) transformed
 
 alpha -> theta[k] -> z[i] -> x[i]
 mu -> y[i] <- z[i]</textarea>
       <div class="help">
         <strong>DSL</strong><br/>
         • Dimension declaration: <code>dim &lt;symbol&gt;[(&lt;label_override_in_mathjax&gt;)] [&lt;description&gt;]</code><br/>
-        • Node declaration: <code>node &lt;name[dims]&gt; [(&lt;symbol&gt;)] &lt;description&gt; &lt;type&gt; ~ &lt;dist&gt;</code><br/>
+        • Node declaration: <code>&lt;type&gt; &lt;name[dims]&gt; [(&lt;symbol&gt;)] &lt;description&gt; [~ &lt;dist&gt;]</code><br/>
         • Types: <code>latent</code>, <code>observed</code>, <code>fixed</code>, <code>deterministic</code><br/>
         • Edge chain: <code>a-&gt;b-&gt;c&lt;-d</code>
       </div>
