@@ -411,15 +411,17 @@ const drawMinimap = () => {
   }
 
   for (const node of snapshot.nodes) {
-    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    r.setAttribute('x', String(offX + node.x * scale));
-    r.setAttribute('y', String(offY + node.y * scale));
-    r.setAttribute('width', String(node.w * scale));
-    r.setAttribute('height', String(node.h * scale));
-    r.setAttribute('fill', node.type === 'observed' ? '#94a3b8' : '#cbd5e1');
-    r.setAttribute('stroke', '#64748b');
-    r.setAttribute('stroke-width', '0.5');
-    minimapSvg.appendChild(r);
+    const cx = offX + (node.x + node.w / 2) * scale;
+    const cy = offY + (node.y + node.h / 2) * scale;
+    const radius = Math.max(1.5, Math.min(node.w, node.h) * scale * 0.5);
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', String(cx));
+    circle.setAttribute('cy', String(cy));
+    circle.setAttribute('r', String(radius));
+    circle.setAttribute('fill', node.type === 'observed' ? '#94a3b8' : '#cbd5e1');
+    circle.setAttribute('stroke', '#64748b');
+    circle.setAttribute('stroke-width', '0.5');
+    minimapSvg.appendChild(circle);
   }
 
   const vp = {
