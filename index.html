@@ -52,12 +52,24 @@
     }
     .node-fixed {
       background: transparent;
+      overflow: visible;
     }
     .fixed-dot {
       width: 12px;
       height: 12px;
       border-radius: 50%;
       background: #0f172a;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .fixed-label {
+      position: absolute;
+      left: 50%;
+      top: calc(50% + 12px);
+      transform: translateX(-50%);
+      white-space: nowrap;
     }
 
     .node-desc { font-size: 12px; margin-bottom: 3px; }
