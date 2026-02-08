@@ -183,11 +183,8 @@ const nodeSize = (type) => {
 
 const plateId = (dims) => `${PLATE_PREFIX}${dims.join('×')}`;
 
-const absoluteNodeRef = (nodePath, nodeId) => [...nodePath, nodeId].join('/');
-
 const buildElkGraph = (model) => {
   const plateDimsById = new Map();
-  const nodeParentPath = new Map();
   const root = {
     id: 'root',
     layoutOptions: {
@@ -229,18 +226,13 @@ const buildElkGraph = (model) => {
 
     const { w, h } = nodeSize(n.type);
     parentRef.node.children.push({ id: n.id, width: w, height: h });
-    nodeParentPath.set(n.id, parentRef.path);
   }
 
-  root.edges = model.edges.map((edge, idx) => {
-    const sourcePath = nodeParentPath.get(edge.source) || [];
-    const targetPath = nodeParentPath.get(edge.target) || [];
-    return {
-      id: `e${idx}`,
-      sources: [absoluteNodeRef(sourcePath, edge.source)],
-      targets: [absoluteNodeRef(targetPath, edge.target)]
-    };
-  });
+  root.edges = model.edges.map((edge, idx) => ({
+    id: `e${idx}`,
+    sources: [edge.source],
+    targets: [edge.target]
+  }));
 
   return { graph: root, plateDimsById };
 };
