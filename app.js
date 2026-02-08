@@ -238,29 +238,6 @@ const collectAbsoluteLayout = (node, offsetX = 0, offsetY = 0, out = new Map()) 
   return out;
 };
 
-const collectAbsoluteEdges = (node, offsetX = 0, offsetY = 0, out = []) => {
-  const x = (node.x || 0) + offsetX;
-  const y = (node.y || 0) + offsetY;
-
-  for (const edge of node.edges || []) {
-    const sections = (edge.sections || []).map((sec) => {
-      if (!sec.startPoint || !sec.endPoint) return null;
-      const translate = (p) => ({ x: p.x + x, y: p.y + y });
-      return {
-        ...sec,
-        startPoint: translate(sec.startPoint),
-        endPoint: translate(sec.endPoint),
-        bendPoints: (sec.bendPoints || []).map(translate)
-      };
-    }).filter(Boolean);
-
-    if (sections.length) out.push({ ...edge, sections });
-  }
-
-  for (const child of node.children || []) collectAbsoluteEdges(child, x, y, out);
-  return out;
-};
-
 const plateLabel = (dims, dimLookup) => dims.map((dimName) => {
   const d = dimLookup.get(dimName);
   return d ? `${d.symbol} (${d.description})` : dimName;
@@ -272,7 +249,6 @@ const render = async () => {
     const model = parseDsl(dslInput.value);
     const layout = await elk.layout(buildElkGraph(model));
     const byId = collectAbsoluteLayout(layout);
-    const edges = collectAbsoluteEdges(layout);
 
     const width = Math.max((layout.width || 800) + PADDING * 2, canvas.clientWidth);
     const height = Math.max((layout.height || 500) + PADDING * 2, canvas.clientHeight);
@@ -317,8 +293,19 @@ const render = async () => {
       edgeLayer.appendChild(group);
     }
 
-    for (const edge of edges) {
-      for (const sec of edge.sections || []) {
+    for (const edge of layout.edges || []) {
+      const edgeContainer = byId.get(edge.container || 'root') || { x: 0, y: 0 };
+      const sections = (edge.sections || []).filter((sec) => sec.startPoint && sec.endPoint).map((sec) => {
+        const translate = (p) => ({ x: p.x + edgeContainer.x, y: p.y + edgeContainer.y });
+        return {
+          ...sec,
+          startPoint: translate(sec.startPoint),
+          endPoint: translate(sec.endPoint),
+          bendPoints: (sec.bendPoints || []).map(translate)
+        };
+      });
+
+      for (const sec of sections) {
         const points = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x + PADDING} ${p.y + PADDING}`).join(' '));
@@ -326,7 +313,11 @@ const render = async () => {
         path.setAttribute('stroke', '#0f172a');
         path.setAttribute('stroke-width', '2');
         edgeLayer.appendChild(path);
+      }
 
+      const terminalSections = sections.filter((sec) => !(sec.outgoingSections || []).length);
+      for (const sec of (terminalSections.length ? terminalSections : sections.slice(-1))) {
+        const points = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
         const last = points[points.length - 1];
         const prev = points[points.length - 2] || points[0];
         const dx = last.x - prev.x;
