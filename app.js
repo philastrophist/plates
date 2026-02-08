@@ -307,7 +307,10 @@ const render = async () => {
       el.style.height = `${h}px`;
 
       if (n.type === 'fixed') {
-        el.innerHTML = '<div class="fixed-dot"></div>';
+        el.innerHTML = `
+          <div class="fixed-dot"></div>
+          <div class="node-symbol fixed-label">$${n.symbol}$</div>
+        `;
       } else if (n.type === 'deterministic') {
         el.innerHTML = `
           <div class="node-desc">${n.description}</div>
