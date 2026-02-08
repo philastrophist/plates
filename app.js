@@ -180,30 +180,75 @@ const nodeSize = (type) => {
   return { w: NODE_W, h: NODE_H };
 };
 
-const buildElkGraph = (model) => ({
-  id: 'root',
-  layoutOptions: {
-    'elk.algorithm': 'layered',
-    'elk.direction': 'RIGHT',
-    'elk.spacing.nodeNode': '62',
-    'elk.layered.spacing.nodeNodeBetweenLayers': '84',
-    'elk.edgeRouting': 'ORTHOGONAL'
-  },
-  children: model.nodes.map((n) => {
-    const { w, h } = nodeSize(n.type);
-    return { id: n.id, width: w, height: h };
-  }),
-  edges: model.edges.map((e, idx) => ({ id: `e${idx}`, sources: [e.source], targets: [e.target] }))
-});
+const plateIdForDims = (dims) => `plate:${dims.join('|')}`;
 
-const plateKey = (dims) => dims.join('×');
+const buildElkGraph = (model) => {
+  const root = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': 'RIGHT',
+      'elk.spacing.nodeNode': '62',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '84',
+      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.hierarchyHandling': 'INCLUDE_CHILDREN'
+    },
+    children: [],
+    edges: model.edges.map((e, idx) => ({ id: `e${idx}`, sources: [e.source], targets: [e.target] }))
+  };
+
+  const plateNodes = new Map();
+
+  const ensurePlate = (dims) => {
+    if (dims.length === 0) return root;
+    const id = plateIdForDims(dims);
+    if (plateNodes.has(id)) return plateNodes.get(id);
+
+    const plate = {
+      id,
+      dims,
+      children: [],
+      layoutOptions: {
+        'elk.padding': '[top=30,left=22,bottom=22,right=22]',
+        'elk.spacing.nodeNode': '62',
+        'elk.layered.spacing.nodeNodeBetweenLayers': '84'
+      }
+    };
+
+    const parent = ensurePlate(dims.slice(0, -1));
+    parent.children.push(plate);
+    plateNodes.set(id, plate);
+    return plate;
+  };
+
+  for (const n of model.nodes) {
+    const parent = ensurePlate(n.dims);
+    const { w, h } = nodeSize(n.type);
+    parent.children.push({ id: n.id, width: w, height: h });
+  }
+
+  return root;
+};
+
+const collectAbsoluteLayout = (node, offsetX = 0, offsetY = 0, out = new Map()) => {
+  const x = (node.x || 0) + offsetX;
+  const y = (node.y || 0) + offsetY;
+  out.set(node.id, { ...node, x, y });
+  for (const child of node.children || []) collectAbsoluteLayout(child, x, y, out);
+  return out;
+};
+
+const plateLabel = (dims, dimLookup) => dims.map((dimName) => {
+  const d = dimLookup.get(dimName);
+  return d ? `${d.symbol} (${d.description})` : dimName;
+}).join(' × ');
 
 const render = async () => {
   try {
     errorsEl.textContent = '';
     const model = parseDsl(dslInput.value);
     const layout = await elk.layout(buildElkGraph(model));
-    const byId = new Map(layout.children.map((c) => [c.id, c]));
+    const byId = collectAbsoluteLayout(layout);
 
     const width = Math.max((layout.width || 800) + PADDING * 2, canvas.clientWidth);
     const height = Math.max((layout.height || 500) + PADDING * 2, canvas.clientHeight);
@@ -217,27 +262,15 @@ const render = async () => {
     nodeLayer.style.height = `${height}px`;
     nodeLayer.innerHTML = '';
 
-    const plates = new Map();
-    for (const n of model.nodes) {
-      const p = byId.get(n.id);
-      if (!p) continue;
-      const key = plateKey(n.dims);
-      if (!key) continue;
-      const { w, h } = nodeSize(n.type);
-      const existing = plates.get(key) || { dims: n.dims, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-      existing.minX = Math.min(existing.minX, p.x + PADDING);
-      existing.minY = Math.min(existing.minY, p.y + PADDING);
-      existing.maxX = Math.max(existing.maxX, p.x + PADDING + w);
-      existing.maxY = Math.max(existing.maxY, p.y + PADDING + h);
-      plates.set(key, existing);
-    }
+    const plateLayout = [...byId.values()]
+      .filter((n) => n.id.startsWith('plate:'))
+      .sort((a, b) => a.dims.length - b.dims.length);
 
-    for (const plate of [...plates.values()].sort((a, b) => b.dims.length - a.dims.length)) {
-      const pad = 24;
-      const x = plate.minX - pad;
-      const y = plate.minY - pad;
-      const w = plate.maxX - plate.minX + pad * 2;
-      const h = plate.maxY - plate.minY + pad * 2;
+    for (const plate of plateLayout) {
+      const x = plate.x + PADDING;
+      const y = plate.y + PADDING;
+      const w = plate.width || 0;
+      const h = plate.height || 0;
       const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -255,16 +288,24 @@ const render = async () => {
       label.setAttribute('y', String(y + 17));
       label.setAttribute('fill', '#0f172a');
       label.setAttribute('font-size', '12');
-      label.textContent = plate.dims.map((dimName) => {
-        const d = model.dims.get(dimName);
-        return d ? `${d.symbol} (${d.description})` : dimName;
-      }).join(' × ');
+      label.textContent = plateLabel(plate.dims || [], model.dims);
       group.appendChild(label);
       edgeLayer.appendChild(group);
     }
 
     for (const edge of layout.edges || []) {
-      for (const sec of edge.sections || []) {
+      const edgeContainer = byId.get(edge.container || 'root') || { x: 0, y: 0 };
+      const sections = (edge.sections || []).filter((sec) => sec.startPoint && sec.endPoint).map((sec) => {
+        const translate = (p) => ({ x: p.x + edgeContainer.x, y: p.y + edgeContainer.y });
+        return {
+          ...sec,
+          startPoint: translate(sec.startPoint),
+          endPoint: translate(sec.endPoint),
+          bendPoints: (sec.bendPoints || []).map(translate)
+        };
+      });
+
+      for (const sec of sections) {
         const points = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x + PADDING} ${p.y + PADDING}`).join(' '));
@@ -272,7 +313,11 @@ const render = async () => {
         path.setAttribute('stroke', '#0f172a');
         path.setAttribute('stroke-width', '2');
         edgeLayer.appendChild(path);
+      }
 
+      const terminalSections = sections.filter((sec) => !(sec.outgoingSections || []).length);
+      for (const sec of (terminalSections.length ? terminalSections : sections.slice(-1))) {
+        const points = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
         const last = points[points.length - 1];
         const prev = points[points.length - 2] || points[0];
         const dx = last.x - prev.x;
