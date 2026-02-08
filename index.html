@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DAFT-style Bayesian Plates DSL</title>
+  <script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <style>
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #f8fafc; color: #0f172a; }
+    .app { display: grid; grid-template-columns: 430px 1fr; height: 100vh; }
+    .editor { border-right: 1px solid #e2e8f0; padding: 16px; background: #ffffff; }
+    textarea { width: 100%; height: calc(100vh - 255px); border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: none; }
+    .help { font-size: 12px; color: #334155; line-height: 1.45; margin-top: 12px; }
+    .canvas-wrap { position: relative; overflow: auto; }
+    #edge-layer { position: absolute; inset: 0; }
+    .node-layer { position: relative; min-width: 100%; min-height: 100%; }
+
+    .node {
+      position: absolute;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #0f172a;
+      font-size: 13px;
+      line-height: 1.2;
+      pointer-events: none;
+    }
+    .node-latent,
+    .node-observed {
+      border-radius: 50%;
+      border: 2px solid #0f172a;
+      padding: 10px;
+      flex-direction: column;
+      background: #fff;
+    }
+    .node-observed { background: #d1d5db; }
+    .node-deterministic {
+      border: 2px solid #0f172a;
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 8px;
+      flex-direction: column;
+    }
+    .node-fixed {
+      background: transparent;
+    }
+    .fixed-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #0f172a;
+    }
+
+    .node-desc { font-size: 12px; margin-bottom: 3px; }
+    .node-symbol { font-size: 14px; }
+    .node-tilde { margin: 4px 0; font-weight: 700; }
+    .node-dist { font-size: 12px; }
+
+    .error { color: #b91c1c; white-space: pre-wrap; font-size: 12px; margin-top: 12px; }
+    .title { margin: 0 0 8px; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="editor">
+      <h1 class="title">DAFT-style Plate DSL</h1>
+      <textarea id="dsl">dim k(k) components
+dim i(i) observations
+
+node alpha (\alpha) concentration latent ~ N(0,1)
+node theta[k] (\theta_k) weights latent ~ Dirichlet(\alpha)
+node z[i] (z_i) assignments latent ~ Categorical(\theta)
+node x[i] (x_i) "observed values" observed
+node mu (\mu) center fixed
+node y[i] (y_i) transformed deterministic
+
+alpha -> theta[k] -> z[i] -> x[i]
+mu -> y[i] <- z[i]</textarea>
+      <div class="help">
+        <strong>DSL</strong><br/>
+        • Dimension declaration: <code>dim &lt;name&gt; (&lt;symbol&gt;) &lt;description&gt;</code><br/>
+        • Node declaration: <code>node &lt;name[dims]&gt; (&lt;symbol&gt;) &lt;description&gt; &lt;type&gt; ~ &lt;dist&gt;</code><br/>
+        • Types: <code>latent</code>, <code>observed</code>, <code>fixed</code>, <code>deterministic</code><br/>
+        • Edge chain: <code>a-&gt;b-&gt;c&lt;-d</code>
+      </div>
+      <div id="errors" class="error"></div>
+    </section>
+    <section id="canvas" class="canvas-wrap">
+      <svg id="edge-layer"></svg>
+      <div id="node-layer" class="node-layer"></div>
+    </section>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
