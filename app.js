@@ -33,7 +33,15 @@ const view = {
   contentWidth: 1,
   contentHeight: 1,
   fittedOnce: false,
-  lastSnapshot: null
+  lastSnapshot: null,
+  minimap: {
+    mmW: 214,
+    mmH: 140,
+    scale: 1,
+    offX: 0,
+    offY: 0
+  },
+  minimapDragging: false
 };
 
 const splitTopLevel = (raw, delimiter) => {
@@ -377,15 +385,33 @@ const zoomAt = (factor, cx, cy) => {
   updateTransform();
 };
 
+const panToMinimapPoint = (mmX, mmY) => {
+  const { scale, offX, offY } = view.minimap;
+  if (!scale) return;
+
+  const contentX = (mmX - offX) / scale;
+  const contentY = (mmY - offY) / scale;
+
+  const vpW = viewport.clientWidth / view.scale;
+  const vpH = viewport.clientHeight / view.scale;
+
+  view.tx = -(contentX - vpW / 2) * view.scale;
+  view.ty = -(contentY - vpH / 2) * view.scale;
+  updateTransform();
+};
+
 const drawMinimap = () => {
   const snapshot = view.lastSnapshot;
   if (!snapshot) return;
 
-  const mmW = 214;
-  const mmH = 140;
+  const { mmW, mmH } = view.minimap;
   const scale = Math.min(mmW / Math.max(view.contentWidth, 1), mmH / Math.max(view.contentHeight, 1));
   const offX = (mmW - view.contentWidth * scale) / 2;
   const offY = (mmH - view.contentHeight * scale) / 2;
+
+  view.minimap.scale = scale;
+  view.minimap.offX = offX;
+  view.minimap.offY = offY;
 
   minimapSvg.setAttribute('viewBox', `0 0 ${mmW} ${mmH}`);
   minimapSvg.innerHTML = '';
@@ -678,6 +704,34 @@ minimapToggle.addEventListener('click', () => {
   const collapsed = minimapEl.classList.contains('collapsed');
   minimapToggle.textContent = collapsed ? 'Expand' : 'Collapse';
 });
+
+const minimapPointFromEvent = (event) => {
+  const rect = minimapSvg.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * view.minimap.mmW;
+  const y = ((event.clientY - rect.top) / Math.max(rect.height, 1)) * view.minimap.mmH;
+  return { x, y };
+};
+
+minimapSvg.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  view.minimapDragging = true;
+  const { x, y } = minimapPointFromEvent(event);
+  panToMinimapPoint(x, y);
+  minimapSvg.setPointerCapture(event.pointerId);
+});
+
+minimapSvg.addEventListener('pointermove', (event) => {
+  if (!view.minimapDragging) return;
+  const { x, y } = minimapPointFromEvent(event);
+  panToMinimapPoint(x, y);
+});
+
+const stopMinimapDrag = () => {
+  view.minimapDragging = false;
+};
+
+minimapSvg.addEventListener('pointerup', stopMinimapDrag);
+minimapSvg.addEventListener('pointercancel', stopMinimapDrag);
 
 dslInput.addEventListener('input', () => {
   view.fittedOnce = false;
