@@ -56,6 +56,22 @@ const parseNodeRef = (raw) => {
   return { name, dims };
 };
 
+const canonicalDims = (dims) => [...dims].sort((a, b) => a.localeCompare(b));
+
+const nodeIdFor = (name, dims) => {
+  if (!dims.length) return name;
+  return `${name}::${dims.join('|')}`;
+};
+
+const canonicalNodeRef = (ref) => {
+  const dims = canonicalDims(ref.dims || []);
+  return {
+    ...ref,
+    dims,
+    id: nodeIdFor(ref.name, dims)
+  };
+};
+
 const parseDimDecl = (line) => {
   const m = line.match(/^dim\s+([A-Za-z_][\w]*)(?:\s*\(([^)]*)\))?(?:\s+(.+))?$/);
   if (!m) throw new Error(`Invalid dim declaration: "${line}"`);
@@ -121,9 +137,12 @@ const parseNodeDecl = (line) => {
   }
 
   const description = stripQuotes(rest || ref.name);
+  const canonicalRef = canonicalNodeRef(ref);
+
   return {
-    id: ref.name,
-    dims: ref.dims,
+    id: canonicalRef.id,
+    name: canonicalRef.name,
+    dims: canonicalRef.dims,
     symbol,
     description,
     distribution,
@@ -132,16 +151,18 @@ const parseNodeDecl = (line) => {
 };
 
 const ensureNode = (nodes, ref) => {
-  const existing = nodes.get(ref.name) || {
-    id: ref.name,
-    dims: ref.dims,
-    symbol: defaultNodeSymbol(ref),
-    description: ref.name,
+  const canonicalRef = canonicalNodeRef(ref);
+  const existing = nodes.get(canonicalRef.id) || {
+    id: canonicalRef.id,
+    name: canonicalRef.name,
+    dims: canonicalRef.dims,
+    symbol: defaultNodeSymbol(canonicalRef),
+    description: canonicalRef.name,
     distribution: '',
     type: 'latent'
   };
-  if (ref.dims.length && existing.dims.length === 0) existing.dims = ref.dims;
-  nodes.set(ref.name, existing);
+  if (canonicalRef.dims.length && existing.dims.length === 0) existing.dims = canonicalRef.dims;
+  nodes.set(canonicalRef.id, existing);
   return existing;
 };
 
@@ -163,21 +184,21 @@ const parseDsl = (source) => {
     if (/^(latent|observed|fixed|deterministic)\b/i.test(trimmed)) {
       const node = parseNodeDecl(trimmed);
       if (!NODE_TYPES.has(node.type)) throw new Error(`Line ${idx + 1}: unsupported node type "${node.type}"`);
-      const existing = ensureNode(nodes, { name: node.id, dims: node.dims });
+      const existing = ensureNode(nodes, { name: node.name, dims: node.dims });
       Object.assign(existing, node);
       continue;
     }
 
     if (/(->|<-)/.test(trimmed)) {
       const tokens = trimmed.split(/(->|<-)/).map((t) => t.trim()).filter(Boolean);
-      let current = parseNodeRef(tokens[0]);
+      let current = canonicalNodeRef(parseNodeRef(tokens[0]));
       ensureNode(nodes, current);
       for (let i = 1; i < tokens.length; i += 2) {
         const op = tokens[i];
-        const next = parseNodeRef(tokens[i + 1]);
+        const next = canonicalNodeRef(parseNodeRef(tokens[i + 1]));
         ensureNode(nodes, next);
-        if (op === '->') edges.push({ source: current.name, target: next.name });
-        if (op === '<-') edges.push({ source: next.name, target: current.name });
+        if (op === '->') edges.push({ source: current.id, target: next.id });
+        if (op === '<-') edges.push({ source: next.id, target: current.id });
         current = next;
       }
       continue;
