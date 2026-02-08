@@ -57,22 +57,41 @@ const parseNodeRef = (raw) => {
 };
 
 const parseDimDecl = (line) => {
-  const m = line.match(/^dim\s+([A-Za-z_][\w]*)(?:\(([^)]*)\))?(?:\s+(.+))?$/);
+  const m = line.match(/^dim\s+([A-Za-z_][\w]*)(?:\s*\(([^)]*)\))?(?:\s+(.+))?$/);
   if (!m) throw new Error(`Invalid dim declaration: "${line}"`);
-  const [, name, symbolRaw, descriptionRaw] = m;
+  const [, symbolRaw, labelRaw, descriptionRaw] = m;
+  const symbol = symbolRaw.trim();
+  const label = (labelRaw || symbol).trim();
   const desc = (descriptionRaw || '').trim();
   return {
-    id: name,
-    symbol: (symbolRaw || name).trim(),
-    description: desc || name
+    id: symbol,
+    symbol,
+    label,
+    description: desc
   };
 };
+
+const normalizeMathContent = (raw) => {
+  const text = raw.trim();
+  if (text.startsWith('$') && text.endsWith('$')) return text.slice(1, -1).trim();
+  if (text.startsWith('\\(') && text.endsWith('\\)')) return text.slice(2, -2).trim();
+  return text;
+};
+
+const escapeHtml = (raw) => raw
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('\"', '&quot;')
+  .replaceAll("'", '&#39;');
 
 const stripQuotes = (s) => {
   const t = s.trim();
   if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) return t.slice(1, -1);
   return t;
 };
+
+const defaultNodeSymbol = (ref) => (ref.dims.length ? `${ref.name}_{${ref.dims.join(',')}}` : ref.name);
 
 const parseNodeDecl = (line) => {
   const body = line.replace(/^node\s+/, '').trim();
@@ -83,10 +102,10 @@ const parseNodeDecl = (line) => {
   const ref = parseNodeRef(refRaw);
   let rest = body.slice(refRaw.length).trim();
 
-  let symbol = ref.name;
+  let symbol = defaultNodeSymbol(ref);
   const symMatch = rest.match(/^\(([^)]*)\)/);
   if (symMatch) {
-    symbol = symMatch[1].trim() || ref.name;
+    symbol = normalizeMathContent(symMatch[1].trim() || defaultNodeSymbol(ref));
     rest = rest.slice(symMatch[0].length).trim();
   }
 
@@ -120,7 +139,7 @@ const ensureNode = (nodes, ref) => {
   const existing = nodes.get(ref.name) || {
     id: ref.name,
     dims: ref.dims,
-    symbol: ref.name,
+    symbol: defaultNodeSymbol(ref),
     description: ref.name,
     distribution: '',
     type: 'latent'
@@ -240,8 +259,11 @@ const collectAbsoluteLayout = (node, offsetX = 0, offsetY = 0, out = new Map()) 
 
 const plateLabel = (dims, dimLookup) => dims.map((dimName) => {
   const d = dimLookup.get(dimName);
-  return d ? `${d.symbol} (${d.description})` : dimName;
-}).join(' × ');
+  const math = normalizeMathContent(d?.label || d?.symbol || dimName);
+  const description = (d?.description || '').trim();
+  const descriptionHtml = description ? ` <span class="plate-label-desc">${escapeHtml(description)}</span>` : '';
+  return `<span class="plate-label-item">$${math}$${descriptionHtml}</span>`;
+}).join('<span class="plate-label-sep"> × </span>');
 
 const render = async () => {
   try {
@@ -283,14 +305,14 @@ const render = async () => {
       rect.setAttribute('stroke-width', '2');
       group.appendChild(rect);
 
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      label.setAttribute('x', String(x + 8));
-      label.setAttribute('y', String(y + 17));
-      label.setAttribute('fill', '#0f172a');
-      label.setAttribute('font-size', '12');
-      label.textContent = plateLabel(plate.dims || [], model.dims);
-      group.appendChild(label);
       edgeLayer.appendChild(group);
+
+      const label = document.createElement('div');
+      label.className = 'plate-label';
+      label.style.left = `${x + 8}px`;
+      label.style.top = `${y + 6}px`;
+      label.innerHTML = plateLabel(plate.dims || [], model.dims);
+      nodeLayer.appendChild(label);
     }
 
     for (const edge of layout.edges || []) {
@@ -354,18 +376,18 @@ const render = async () => {
       if (n.type === 'fixed') {
         el.innerHTML = `
           <div class="fixed-dot"></div>
-          <div class="node-symbol fixed-label">$${n.symbol}$</div>
+          <div class="node-symbol fixed-label">$${normalizeMathContent(n.symbol)}$</div>
         `;
       } else if (n.type === 'deterministic') {
         el.innerHTML = `
           <div class="node-desc">${n.description}</div>
-          <div class="node-symbol">$${n.symbol}$</div>
+          <div class="node-symbol">$${normalizeMathContent(n.symbol)}$</div>
         `;
       } else {
         const dist = n.distribution ? `<div class="node-dist">$${n.distribution}$</div>` : '';
         el.innerHTML = `
           <div class="node-desc">${n.description}</div>
-          <div class="node-symbol">$${n.symbol}$</div>
+          <div class="node-symbol">$${normalizeMathContent(n.symbol)}$</div>
           <div class="node-tilde">~</div>
           ${dist}
         `;
