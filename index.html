@@ -21,6 +21,9 @@
     .canvas-wrap { position: relative; overflow: auto; }
     #edge-layer { position: absolute; inset: 0; }
     .node-layer { position: relative; min-width: 100%; min-height: 100%; }
+    .plate-label { position: absolute; font-size: 12px; color: #0f172a; white-space: nowrap; pointer-events: none; }
+    .plate-label-desc { margin-left: 3px; }
+    .plate-label-sep { margin: 0 4px; }
 
     .node {
       position: absolute;
@@ -85,8 +88,8 @@
   <div class="app">
     <section class="editor">
       <h1 class="title">DAFT-style Plate DSL</h1>
-      <textarea id="dsl">dim k(k) components
-dim i(i) observations
+      <textarea id="dsl">dim k components
+dim i observations
 
 node alpha (\alpha) concentration latent ~ N(0,1)
 node theta[k] (\theta_k) weights latent ~ Dirichlet(\alpha)
@@ -99,8 +102,8 @@ alpha -> theta[k] -> z[i] -> x[i]
 mu -> y[i] <- z[i]</textarea>
       <div class="help">
         <strong>DSL</strong><br/>
-        • Dimension declaration: <code>dim &lt;name&gt; (&lt;symbol&gt;) &lt;description&gt;</code><br/>
-        • Node declaration: <code>node &lt;name[dims]&gt; (&lt;symbol&gt;) &lt;description&gt; &lt;type&gt; ~ &lt;dist&gt;</code><br/>
+        • Dimension declaration: <code>dim &lt;symbol&gt;[(&lt;label_override_in_mathjax&gt;)] [&lt;description&gt;]</code><br/>
+        • Node declaration: <code>node &lt;name[dims]&gt; [(&lt;symbol&gt;)] &lt;description&gt; &lt;type&gt; ~ &lt;dist&gt;</code><br/>
         • Types: <code>latent</code>, <code>observed</code>, <code>fixed</code>, <code>deterministic</code><br/>
         • Edge chain: <code>a-&gt;b-&gt;c&lt;-d</code>
       </div>
