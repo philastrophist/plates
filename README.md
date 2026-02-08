@@ -30,7 +30,7 @@ dim i(i_{1:N}) observations
 <type> <name[dims]> [(<symbol>)] <description> [~ <distribution>]
 ```
 
-- `(<symbol>)` is optional; default is `<name>_{<dims>}` when dimensions are present, otherwise `<name>`
+- `(<symbol>)` is optional; default is `<name>_{<dim_labels>}` when dimensions are present (using each `dim` label override when provided), otherwise `<name>`
 - `type` is one of: `latent`, `observed`, `fixed`, `deterministic`
 - `~ <distribution>` is optional
 

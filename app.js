@@ -107,7 +107,16 @@ const stripQuotes = (s) => {
   return t;
 };
 
-const defaultNodeSymbol = (ref) => (ref.dims.length ? `${ref.name}_{${ref.dims.join(',')}}` : ref.name);
+const dimMathLabel = (dimName, dimLookup) => {
+  const d = dimLookup?.get(dimName);
+  return normalizeMathContent(d?.label || d?.symbol || dimName);
+};
+
+const defaultNodeSymbol = (ref, dimLookup) => {
+  if (!ref.dims.length) return ref.name;
+  const dims = ref.dims.map((dimName) => dimMathLabel(dimName, dimLookup));
+  return `${ref.name}_{${dims.join(',')}}`;
+};
 
 const parseNodeDecl = (line) => {
   const typePrefix = line.match(/^(latent|observed|fixed|deterministic)\b\s*(.*)$/i);
@@ -123,9 +132,11 @@ const parseNodeDecl = (line) => {
   let rest = body.slice(refRaw.length).trim();
 
   let symbol = defaultNodeSymbol(ref);
+  let autoSymbol = true;
   const symMatch = rest.match(/^\(([^)]*)\)/);
   if (symMatch) {
     symbol = normalizeMathContent(symMatch[1].trim() || defaultNodeSymbol(ref));
+    autoSymbol = false;
     rest = rest.slice(symMatch[0].length).trim();
   }
 
@@ -144,6 +155,7 @@ const parseNodeDecl = (line) => {
     name: canonicalRef.name,
     dims: canonicalRef.dims,
     symbol,
+    autoSymbol,
     description,
     distribution,
     type
@@ -157,6 +169,7 @@ const ensureNode = (nodes, ref) => {
     name: canonicalRef.name,
     dims: canonicalRef.dims,
     symbol: defaultNodeSymbol(canonicalRef),
+    autoSymbol: true,
     description: canonicalRef.name,
     distribution: '',
     type: 'latent'
@@ -208,6 +221,13 @@ const parseDsl = (source) => {
   }
 
   return { dims, nodes: [...nodes.values()], edges };
+};
+
+const applyDefaultNodeSymbols = (model) => {
+  for (const node of model.nodes) {
+    if (!node.autoSymbol) continue;
+    node.symbol = defaultNodeSymbol(node, model.dims);
+  }
 };
 
 const nodeSize = (type) => {
@@ -286,6 +306,7 @@ const render = async () => {
   try {
     errorsEl.textContent = '';
     const model = parseDsl(dslInput.value);
+    applyDefaultNodeSymbols(model);
     const layout = await elk.layout(buildElkGraph(model));
     const byId = collectAbsoluteLayout(layout);
 
