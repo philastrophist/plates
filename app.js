@@ -94,7 +94,11 @@ const stripQuotes = (s) => {
 const defaultNodeSymbol = (ref) => (ref.dims.length ? `${ref.name}_{${ref.dims.join(',')}}` : ref.name);
 
 const parseNodeDecl = (line) => {
-  const body = line.replace(/^node\s+/, '').trim();
+  const typePrefix = line.match(/^(latent|observed|fixed|deterministic)\b\s*(.*)$/i);
+  if (!typePrefix) throw new Error(`Invalid node declaration: "${line}"`);
+
+  const type = typePrefix[1].toLowerCase();
+  const body = typePrefix[2].trim();
   const nameMatch = body.match(/^([A-Za-z_][\w]*(?:\[[^\]]+\])?)/);
   if (!nameMatch) throw new Error(`Invalid node declaration: "${line}"`);
 
@@ -114,14 +118,6 @@ const parseNodeDecl = (line) => {
   if (distIdx >= 0) {
     distribution = rest.slice(distIdx + 1).trim();
     rest = rest.slice(0, distIdx).trim();
-  }
-
-  let type = 'latent';
-  const typeRegex = /\b(latent|observed|fixed|deterministic)\b/i;
-  const typeMatch = rest.match(typeRegex);
-  if (typeMatch) {
-    type = typeMatch[1].toLowerCase();
-    rest = (rest.slice(0, typeMatch.index) + rest.slice(typeMatch.index + typeMatch[0].length)).trim();
   }
 
   const description = stripQuotes(rest || ref.name);
@@ -164,7 +160,7 @@ const parseDsl = (source) => {
       continue;
     }
 
-    if (trimmed.startsWith('node ')) {
+    if (/^(latent|observed|fixed|deterministic)\b/i.test(trimmed)) {
       const node = parseNodeDecl(trimmed);
       if (!NODE_TYPES.has(node.type)) throw new Error(`Line ${idx + 1}: unsupported node type "${node.type}"`);
       const existing = ensureNode(nodes, { name: node.id, dims: node.dims });
@@ -187,7 +183,7 @@ const parseDsl = (source) => {
       continue;
     }
 
-    throw new Error(`Line ${idx + 1}: expected dim, node, or edge chain`);
+    throw new Error(`Line ${idx + 1}: expected dim, typed node declaration, or edge chain`);
   }
 
   return { dims, nodes: [...nodes.values()], edges };
@@ -384,11 +380,12 @@ const render = async () => {
           <div class="node-symbol">$${normalizeMathContent(n.symbol)}$</div>
         `;
       } else {
+        const tilde = n.distribution ? '<div class="node-tilde">~</div>' : '';
         const dist = n.distribution ? `<div class="node-dist">$${n.distribution}$</div>` : '';
         el.innerHTML = `
           <div class="node-desc">${n.description}</div>
           <div class="node-symbol">$${normalizeMathContent(n.symbol)}$</div>
-          <div class="node-tilde">~</div>
+          ${tilde}
           ${dist}
         `;
       }
