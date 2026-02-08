@@ -7,9 +7,42 @@ const dslInput = document.getElementById('dsl');
 const errorsEl = document.getElementById('errors');
 const edgeLayer = document.getElementById('edge-layer');
 const nodeLayer = document.getElementById('node-layer');
-const canvas = document.getElementById('canvas');
+const viewport = document.getElementById('viewport');
+const contentLayer = document.getElementById('content-layer');
+const panToggle = document.getElementById('pan-toggle');
+const zoomOutBtn = document.getElementById('zoom-out');
+const zoomInBtn = document.getElementById('zoom-in');
+const zoomLabel = document.getElementById('zoom-label');
+const resetViewBtn = document.getElementById('reset-view');
+const minimapEl = document.getElementById('minimap');
+const minimapSvg = document.getElementById('minimap-svg');
+const minimapToggle = document.getElementById('minimap-toggle');
 
 const NODE_TYPES = new Set(['latent', 'observed', 'fixed', 'deterministic']);
+
+const view = {
+  scale: 1,
+  tx: 0,
+  ty: 0,
+  panEnabled: true,
+  dragging: false,
+  dragStartX: 0,
+  dragStartY: 0,
+  startTx: 0,
+  startTy: 0,
+  contentWidth: 1,
+  contentHeight: 1,
+  fittedOnce: false,
+  lastSnapshot: null,
+  minimap: {
+    mmW: 214,
+    mmH: 140,
+    scale: 1,
+    offX: 0,
+    offY: 0
+  },
+  minimapDragging: false
+};
 
 const splitTopLevel = (raw, delimiter) => {
   const parts = [];
@@ -322,6 +355,139 @@ const plateLabel = (dims, dimLookup) => dims.map((dimName) => {
   return `<span class="plate-label-item">$${math}$${descriptionHtml}</span>`;
 }).join('<span class="plate-label-sep"> × </span>');
 
+const updateTransform = () => {
+  contentLayer.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
+  zoomLabel.textContent = `${Math.round(view.scale * 100)}%`;
+  drawMinimap();
+};
+
+const fitToWindow = () => {
+  const vw = viewport.clientWidth || 1;
+  const vh = viewport.clientHeight || 1;
+  const sx = vw / Math.max(view.contentWidth, 1);
+  const sy = vh / Math.max(view.contentHeight, 1);
+  view.scale = Math.min(sx, sy, 1.8);
+  view.tx = (vw - view.contentWidth * view.scale) / 2;
+  view.ty = (vh - view.contentHeight * view.scale) / 2;
+  updateTransform();
+};
+
+const zoomAt = (factor, cx, cy) => {
+  const oldScale = view.scale;
+  const nextScale = Math.max(0.2, Math.min(3.5, oldScale * factor));
+  if (nextScale === oldScale) return;
+
+  const localX = (cx - view.tx) / oldScale;
+  const localY = (cy - view.ty) / oldScale;
+  view.scale = nextScale;
+  view.tx = cx - localX * nextScale;
+  view.ty = cy - localY * nextScale;
+  updateTransform();
+};
+
+const panToMinimapPoint = (mmX, mmY) => {
+  const { scale, offX, offY } = view.minimap;
+  if (!scale) return;
+
+  const contentX = (mmX - offX) / scale;
+  const contentY = (mmY - offY) / scale;
+
+  const vpW = viewport.clientWidth / view.scale;
+  const vpH = viewport.clientHeight / view.scale;
+
+  view.tx = -(contentX - vpW / 2) * view.scale;
+  view.ty = -(contentY - vpH / 2) * view.scale;
+  updateTransform();
+};
+
+const drawMinimap = () => {
+  const snapshot = view.lastSnapshot;
+  if (!snapshot) return;
+
+  const { mmW, mmH } = view.minimap;
+  const scale = Math.min(mmW / Math.max(view.contentWidth, 1), mmH / Math.max(view.contentHeight, 1));
+  const offX = (mmW - view.contentWidth * scale) / 2;
+  const offY = (mmH - view.contentHeight * scale) / 2;
+
+  view.minimap.scale = scale;
+  view.minimap.offX = offX;
+  view.minimap.offY = offY;
+
+  minimapSvg.setAttribute('viewBox', `0 0 ${mmW} ${mmH}`);
+  minimapSvg.innerHTML = '';
+
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('x', '0');
+  bg.setAttribute('y', '0');
+  bg.setAttribute('width', String(mmW));
+  bg.setAttribute('height', String(mmH));
+  bg.setAttribute('fill', '#f8fafc');
+  minimapSvg.appendChild(bg);
+
+  for (const plate of snapshot.plates) {
+    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    r.setAttribute('x', String(offX + plate.x * scale));
+    r.setAttribute('y', String(offY + plate.y * scale));
+    r.setAttribute('width', String(plate.w * scale));
+    r.setAttribute('height', String(plate.h * scale));
+    r.setAttribute('fill', 'none');
+    r.setAttribute('stroke', '#94a3b8');
+    r.setAttribute('stroke-width', '1');
+    minimapSvg.appendChild(r);
+  }
+
+  for (const node of snapshot.nodes) {
+    const x = offX + node.x * scale;
+    const y = offY + node.y * scale;
+    const w = Math.max(1.2, node.w * scale);
+    const h = Math.max(1.2, node.h * scale);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+
+    if (node.type === 'deterministic') {
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('y', String(y));
+      rect.setAttribute('width', String(w));
+      rect.setAttribute('height', String(h));
+      rect.setAttribute('fill', '#ffffff');
+      rect.setAttribute('stroke', '#0f172a');
+      rect.setAttribute('stroke-width', '0.7');
+      rect.setAttribute('rx', '1.5');
+      minimapSvg.appendChild(rect);
+      continue;
+    }
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    const radius = node.type === 'fixed'
+      ? Math.max(1.3, Math.min(w, h) * 0.28)
+      : Math.max(1.3, Math.min(w, h) * 0.5);
+    circle.setAttribute('cx', String(cx));
+    circle.setAttribute('cy', String(cy));
+    circle.setAttribute('r', String(radius));
+    circle.setAttribute('fill', node.type === 'observed' ? '#d1d5db' : (node.type === 'fixed' ? '#0f172a' : '#ffffff'));
+    circle.setAttribute('stroke', node.type === 'fixed' ? 'none' : '#0f172a');
+    circle.setAttribute('stroke-width', node.type === 'fixed' ? '0' : '0.7');
+    minimapSvg.appendChild(circle);
+  }
+
+  const vp = {
+    x: (-view.tx) / view.scale,
+    y: (-view.ty) / view.scale,
+    w: viewport.clientWidth / view.scale,
+    h: viewport.clientHeight / view.scale
+  };
+  const vr = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  vr.setAttribute('x', String(offX + vp.x * scale));
+  vr.setAttribute('y', String(offY + vp.y * scale));
+  vr.setAttribute('width', String(vp.w * scale));
+  vr.setAttribute('height', String(vp.h * scale));
+  vr.setAttribute('fill', 'rgba(59,130,246,0.15)');
+  vr.setAttribute('stroke', '#2563eb');
+  vr.setAttribute('stroke-width', '1');
+  minimapSvg.appendChild(vr);
+};
+
 const render = async () => {
   try {
     errorsEl.textContent = '';
@@ -330,8 +496,10 @@ const render = async () => {
     const layout = await elk.layout(buildElkGraph(model));
     const byId = collectAbsoluteLayout(layout);
 
-    const width = Math.max((layout.width || 800) + PADDING * 2, canvas.clientWidth);
-    const height = Math.max((layout.height || 500) + PADDING * 2, canvas.clientHeight);
+    const width = (layout.width || 800) + PADDING * 2;
+    const height = (layout.height || 500) + PADDING * 2;
+    view.contentWidth = width;
+    view.contentHeight = height;
 
     edgeLayer.setAttribute('width', width);
     edgeLayer.setAttribute('height', height);
@@ -419,10 +587,13 @@ const render = async () => {
       }
     }
 
+    const minimapNodes = [];
     for (const n of model.nodes) {
       const p = byId.get(n.id);
       if (!p) continue;
       const { w, h } = nodeSize(n.type);
+
+      minimapNodes.push({ x: p.x + PADDING, y: p.y + PADDING, w, h, type: n.type });
 
       const el = document.createElement('div');
       el.className = `node node-${n.type}`;
@@ -455,7 +626,24 @@ const render = async () => {
       nodeLayer.appendChild(el);
     }
 
+    view.lastSnapshot = {
+      nodes: minimapNodes,
+      plates: plateLayout.map((plate) => ({
+        x: plate.x + PADDING,
+        y: plate.y + PADDING,
+        w: plate.width || 0,
+        h: plate.height || 0
+      }))
+    };
+
     if (window.MathJax?.typesetPromise) await window.MathJax.typesetPromise([nodeLayer]);
+
+    if (!view.fittedOnce) {
+      fitToWindow();
+      view.fittedOnce = true;
+    } else {
+      updateTransform();
+    }
   } catch (err) {
     errorsEl.textContent = String(err.message || err);
   }
@@ -467,6 +655,87 @@ const debounceRender = () => {
   timer = setTimeout(() => { render(); }, 120);
 };
 
-dslInput.addEventListener('input', debounceRender);
-window.addEventListener('resize', debounceRender);
+panToggle.addEventListener('click', () => {
+  view.panEnabled = !view.panEnabled;
+  panToggle.classList.toggle('active', view.panEnabled);
+  panToggle.textContent = view.panEnabled ? 'Grab to move' : 'Pan disabled';
+});
+
+viewport.addEventListener('pointerdown', (event) => {
+  if (!view.panEnabled || event.button !== 0) return;
+  view.dragging = true;
+  view.dragStartX = event.clientX;
+  view.dragStartY = event.clientY;
+  view.startTx = view.tx;
+  view.startTy = view.ty;
+  viewport.classList.add('panning');
+  viewport.setPointerCapture(event.pointerId);
+});
+
+viewport.addEventListener('pointermove', (event) => {
+  if (!view.dragging) return;
+  view.tx = view.startTx + (event.clientX - view.dragStartX);
+  view.ty = view.startTy + (event.clientY - view.dragStartY);
+  updateTransform();
+});
+
+const endDrag = () => {
+  view.dragging = false;
+  viewport.classList.remove('panning');
+};
+
+viewport.addEventListener('pointerup', endDrag);
+viewport.addEventListener('pointercancel', endDrag);
+
+viewport.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  const cx = event.clientX - rect.left;
+  const cy = event.clientY - rect.top;
+  zoomAt(event.deltaY < 0 ? 1.1 : 0.9, cx, cy);
+}, { passive: false });
+
+zoomInBtn.addEventListener('click', () => zoomAt(1.2, viewport.clientWidth / 2, viewport.clientHeight / 2));
+zoomOutBtn.addEventListener('click', () => zoomAt(1 / 1.2, viewport.clientWidth / 2, viewport.clientHeight / 2));
+resetViewBtn.addEventListener('click', fitToWindow);
+
+minimapToggle.addEventListener('click', () => {
+  minimapEl.classList.toggle('collapsed');
+  const collapsed = minimapEl.classList.contains('collapsed');
+  minimapToggle.textContent = collapsed ? 'Expand' : 'Collapse';
+});
+
+const minimapPointFromEvent = (event) => {
+  const rect = minimapSvg.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * view.minimap.mmW;
+  const y = ((event.clientY - rect.top) / Math.max(rect.height, 1)) * view.minimap.mmH;
+  return { x, y };
+};
+
+minimapSvg.addEventListener('pointerdown', (event) => {
+  event.preventDefault();
+  view.minimapDragging = true;
+  const { x, y } = minimapPointFromEvent(event);
+  panToMinimapPoint(x, y);
+  minimapSvg.setPointerCapture(event.pointerId);
+});
+
+minimapSvg.addEventListener('pointermove', (event) => {
+  if (!view.minimapDragging) return;
+  const { x, y } = minimapPointFromEvent(event);
+  panToMinimapPoint(x, y);
+});
+
+const stopMinimapDrag = () => {
+  view.minimapDragging = false;
+};
+
+minimapSvg.addEventListener('pointerup', stopMinimapDrag);
+minimapSvg.addEventListener('pointercancel', stopMinimapDrag);
+
+dslInput.addEventListener('input', () => {
+  view.fittedOnce = false;
+  debounceRender();
+});
+window.addEventListener('resize', fitToWindow);
 render();
