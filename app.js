@@ -223,9 +223,29 @@ const parseDsl = (source) => {
   return { dims, nodes: [...nodes.values()], edges };
 };
 
+const legacyDefaultSymbolsFor = (name, dims) => {
+  if (!dims.length) return [name];
+
+  if (dims.length === 1) {
+    const [d] = dims;
+    return [`${name}_${d}`, `${name}_{${d}}`];
+  }
+
+  const joined = dims.join(',');
+  return [`${name}_{${joined}}`, `${name}_${joined}`];
+};
+
+const shouldUseDimAwareDefault = (node) => {
+  if (node.autoSymbol) return true;
+
+  const symbol = normalizeMathContent(node.symbol || '').replaceAll(' ', '');
+  const legacy = legacyDefaultSymbolsFor(node.name, node.dims).map((v) => v.replaceAll(' ', ''));
+  return legacy.includes(symbol);
+};
+
 const applyDefaultNodeSymbols = (model) => {
   for (const node of model.nodes) {
-    if (!node.autoSymbol) continue;
+    if (!shouldUseDimAwareDefault(node)) continue;
     node.symbol = defaultNodeSymbol(node, model.dims);
   }
 };
