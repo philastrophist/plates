@@ -64,3 +64,10 @@ Plates are inferred from node dimensions (`name[dim]`) and labeled from correspo
 
 
 `label_override` is optional and used for plate labels only; it is always rendered as MathJax. If omitted, the dimension symbol is used as the label (also rendered as MathJax). Description, when provided, is rendered after the symbol/label in the plate label.
+
+## View controls
+
+- **Grab to move** toggles drag-to-pan in the diagram viewport.
+- **Zoom in/out** buttons and mouse wheel zoom the diagram.
+- **Reset** fits the full diagram back into the visible canvas.
+- A **collapsible minimap** in the lower-right shows overall bounds and current viewport.
