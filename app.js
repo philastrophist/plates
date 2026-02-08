@@ -127,6 +127,16 @@ const normalizeMathContent = (raw) => {
   return text;
 };
 
+const normalizeCompareText = (raw) => normalizeMathContent(raw || '').replaceAll(' ', '').trim();
+
+const shouldShowNodeDescription = (node) => {
+  const description = (node.description || '').trim();
+  if (!description) return false;
+  const normalizedDescription = normalizeCompareText(description);
+  const normalizedSymbol = normalizeCompareText(node.symbol || '');
+  return normalizedDescription !== normalizedSymbol;
+};
+
 const escapeHtml = (raw) => raw
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -608,15 +618,21 @@ const render = async () => {
           <div class="node-symbol fixed-label">$${normalizeMathContent(n.symbol)}$</div>
         `;
       } else if (n.type === 'deterministic') {
+        const description = shouldShowNodeDescription(n)
+          ? `<div class="node-desc">${escapeHtml(n.description)}</div>`
+          : '';
         el.innerHTML = `
-          <div class="node-desc">${n.description}</div>
+          ${description}
           <div class="node-symbol">$${normalizeMathContent(n.symbol)}$</div>
         `;
       } else {
         const tilde = n.distribution ? '<div class="node-tilde">~</div>' : '';
         const dist = n.distribution ? `<div class="node-dist">$${n.distribution}$</div>` : '';
+        const description = shouldShowNodeDescription(n)
+          ? `<div class="node-desc">${escapeHtml(n.description)}</div>`
+          : '';
         el.innerHTML = `
-          <div class="node-desc">${n.description}</div>
+          ${description}
           <div class="node-symbol">$${normalizeMathContent(n.symbol)}$</div>
           ${tilde}
           ${dist}
