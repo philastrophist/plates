@@ -411,16 +411,37 @@ const drawMinimap = () => {
   }
 
   for (const node of snapshot.nodes) {
-    const cx = offX + (node.x + node.w / 2) * scale;
-    const cy = offY + (node.y + node.h / 2) * scale;
-    const radius = Math.max(1.5, Math.min(node.w, node.h) * scale * 0.5);
+    const x = offX + node.x * scale;
+    const y = offY + node.y * scale;
+    const w = Math.max(1.2, node.w * scale);
+    const h = Math.max(1.2, node.h * scale);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+
+    if (node.type === 'deterministic') {
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('y', String(y));
+      rect.setAttribute('width', String(w));
+      rect.setAttribute('height', String(h));
+      rect.setAttribute('fill', '#ffffff');
+      rect.setAttribute('stroke', '#0f172a');
+      rect.setAttribute('stroke-width', '0.7');
+      rect.setAttribute('rx', '1.5');
+      minimapSvg.appendChild(rect);
+      continue;
+    }
+
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    const radius = node.type === 'fixed'
+      ? Math.max(1.3, Math.min(w, h) * 0.28)
+      : Math.max(1.3, Math.min(w, h) * 0.5);
     circle.setAttribute('cx', String(cx));
     circle.setAttribute('cy', String(cy));
     circle.setAttribute('r', String(radius));
-    circle.setAttribute('fill', node.type === 'observed' ? '#94a3b8' : '#cbd5e1');
-    circle.setAttribute('stroke', '#64748b');
-    circle.setAttribute('stroke-width', '0.5');
+    circle.setAttribute('fill', node.type === 'observed' ? '#d1d5db' : (node.type === 'fixed' ? '#0f172a' : '#ffffff'));
+    circle.setAttribute('stroke', node.type === 'fixed' ? 'none' : '#0f172a');
+    circle.setAttribute('stroke-width', node.type === 'fixed' ? '0' : '0.7');
     minimapSvg.appendChild(circle);
   }
 
