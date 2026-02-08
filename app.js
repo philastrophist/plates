@@ -129,12 +129,22 @@ const normalizeMathContent = (raw) => {
 
 const normalizeCompareText = (raw) => normalizeMathContent(raw || '').replaceAll(' ', '').trim();
 
-const shouldShowNodeDescription = (node) => {
+const shouldShowNodeDescription = (node, dimLookup) => {
   const description = (node.description || '').trim();
   if (!description) return false;
+
   const normalizedDescription = normalizeCompareText(description);
   const normalizedSymbol = normalizeCompareText(node.symbol || '');
-  return normalizedDescription !== normalizedSymbol;
+  if (normalizedDescription === normalizedSymbol) return false;
+
+  const normalizedName = normalizeCompareText(node.name || '');
+  if (normalizedDescription !== normalizedName) return true;
+
+  const dimAwareDefaultSymbol = normalizeCompareText(defaultNodeSymbol(node, dimLookup));
+  if (normalizedSymbol === dimAwareDefaultSymbol) return false;
+
+  const legacyDefaults = legacyDefaultSymbolsFor(node.name, node.dims).map(normalizeCompareText);
+  return !legacyDefaults.includes(normalizedSymbol);
 };
 
 const escapeHtml = (raw) => raw
@@ -618,7 +628,7 @@ const render = async () => {
           <div class="node-symbol fixed-label">$${normalizeMathContent(n.symbol)}$</div>
         `;
       } else if (n.type === 'deterministic') {
-        const description = shouldShowNodeDescription(n)
+        const description = shouldShowNodeDescription(n, model.dims)
           ? `<div class="node-desc">${escapeHtml(n.description)}</div>`
           : '';
         el.innerHTML = `
@@ -628,7 +638,7 @@ const render = async () => {
       } else {
         const tilde = n.distribution ? '<div class="node-tilde">~</div>' : '';
         const dist = n.distribution ? `<div class="node-dist">$${n.distribution}$</div>` : '';
-        const description = shouldShowNodeDescription(n)
+        const description = shouldShowNodeDescription(n, model.dims)
           ? `<div class="node-desc">${escapeHtml(n.description)}</div>`
           : '';
         el.innerHTML = `
