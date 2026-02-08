@@ -134,18 +134,25 @@
   <div class="app">
     <section class="editor">
       <h1 class="title">DAFT-style Plate DSL</h1>
-      <textarea id="dsl">dim k components
-dim i observations
+      <textarea id="dsl">dim c conditions
+dim p participants
+dim t trials
 
-latent alpha (\alpha) concentration ~ N(0,1)
-latent theta[k] (\theta_k) weights ~ Dirichlet(\alpha)
-latent z[i] (z_i) assignments ~ Categorical(\theta)
-observed x[i] (x_i) "observed values"
-fixed mu (\mu) center
-deterministic y[i] (y_i) transformed
+alpha -> r[c,p]
+beta -> r[c,p]
+r[c] -> r[c,p]
+r[p] -> r[c,p]
+r[c,p] -> qt[t,c,p]
 
-alpha -> theta[k] -> z[i] -> x[i]
-mu -> y[i] <- z[i]</textarea>
+gamma -> l[c,p]
+delta -> l[c,p]
+l[c] -> l[c,p]
+l[p] -> l[c,p]
+
+q[c,p,t] -> qt[c,p,t] -> V[c,p,t]
+qt[c,p,t] -> Q[c,p,t]
+eps -> V[c,p,t] -> B[c,p,t] -> Q[c,p,t]
+l[c,p] -> V[c,p,t]</textarea>
       <div class="help">
         <strong>DSL</strong><br/>
         • Dimension declaration: <code>dim &lt;symbol&gt;[(&lt;label_override_in_mathjax&gt;)] [&lt;description&gt;]</code><br/>

@@ -319,6 +319,10 @@ const buildElkGraph = (model) => {
       'elk.direction': 'RIGHT',
       'elk.spacing.nodeNode': '62',
       'elk.layered.spacing.nodeNodeBetweenLayers': '84',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.layered.greedySwitch.type': 'TWO_SIDED',
+      'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+      'elk.layered.thoroughness': '20',
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN'
     },
@@ -374,6 +378,52 @@ const plateLabel = (dims, dimLookup) => dims.map((dimName) => {
   const descriptionHtml = description ? ` <span class="plate-label-desc">${escapeHtml(description)}</span>` : '';
   return `<span class="plate-label-item">$${math}$${descriptionHtml}</span>`;
 }).join('<span class="plate-label-sep"> × </span>');
+
+const buildRoundedOrthogonalPathD = (points, cornerRadius = 16) => {
+  if (!points.length) return '';
+  if (points.length === 1) return `M ${points[0].x + PADDING} ${points[0].y + PADDING}`;
+
+  const withPadding = points.map((p) => ({ x: p.x + PADDING, y: p.y + PADDING }));
+  let d = `M ${withPadding[0].x} ${withPadding[0].y}`;
+
+  for (let i = 1; i < withPadding.length - 1; i += 1) {
+    const prev = withPadding[i - 1];
+    const curr = withPadding[i];
+    const next = withPadding[i + 1];
+
+    const inDx = curr.x - prev.x;
+    const inDy = curr.y - prev.y;
+    const outDx = next.x - curr.x;
+    const outDy = next.y - curr.y;
+
+    const inLen = Math.hypot(inDx, inDy) || 1;
+    const outLen = Math.hypot(outDx, outDy) || 1;
+
+    const uxIn = inDx / inLen;
+    const uyIn = inDy / inLen;
+    const uxOut = outDx / outLen;
+    const uyOut = outDy / outLen;
+
+    const isStraight = Math.abs(uxIn - uxOut) < 1e-6 && Math.abs(uyIn - uyOut) < 1e-6;
+    if (isStraight) {
+      d += ` L ${curr.x} ${curr.y}`;
+      continue;
+    }
+
+    const r = Math.min(cornerRadius, inLen / 2, outLen / 2);
+    const startX = curr.x - uxIn * r;
+    const startY = curr.y - uyIn * r;
+    const endX = curr.x + uxOut * r;
+    const endY = curr.y + uyOut * r;
+
+    d += ` L ${startX} ${startY}`;
+    d += ` Q ${curr.x} ${curr.y} ${endX} ${endY}`;
+  }
+
+  const last = withPadding[withPadding.length - 1];
+  d += ` L ${last.x} ${last.y}`;
+  return d;
+};
 
 const updateTransform = () => {
   contentLayer.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`;
@@ -576,26 +626,32 @@ const render = async () => {
       for (const sec of sections) {
         const points = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('d', points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x + PADDING} ${p.y + PADDING}`).join(' '));
+        path.setAttribute('d', buildRoundedOrthogonalPathD(points));
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke', '#0f172a');
         path.setAttribute('stroke-width', '2');
+        path.setAttribute('stroke-linecap', 'round');
+        path.setAttribute('stroke-linejoin', 'round');
         edgeLayer.appendChild(path);
       }
 
       const terminalSections = sections.filter((sec) => !(sec.outgoingSections || []).length);
       for (const sec of (terminalSections.length ? terminalSections : sections.slice(-1))) {
         const points = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
-        const last = points[points.length - 1];
-        const prev = points[points.length - 2] || points[0];
-        const dx = last.x - prev.x;
-        const dy = last.y - prev.y;
+        const arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        arrowPath.setAttribute('d', buildRoundedOrthogonalPathD(points));
+        const totalLen = arrowPath.getTotalLength();
+        const end = arrowPath.getPointAtLength(totalLen);
+        const before = arrowPath.getPointAtLength(Math.max(0, totalLen - 10));
+
+        const dx = end.x - before.x;
+        const dy = end.y - before.y;
         const len = Math.hypot(dx, dy) || 1;
         const ux = dx / len;
         const uy = dy / len;
         const size = 8;
-        const tipX = last.x + PADDING;
-        const tipY = last.y + PADDING;
+        const tipX = end.x;
+        const tipY = end.y;
         const leftX = tipX - ux * size - uy * size * 0.7;
         const leftY = tipY - uy * size + ux * size * 0.7;
         const rightX = tipX - ux * size + uy * size * 0.7;
