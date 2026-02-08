@@ -261,9 +261,23 @@ const collectLayoutNodes = (layoutNode, offsetX, offsetY, plateDimsById, byId, p
   for (const child of children) collectLayoutNodes(child, x, y, plateDimsById, byId, plates);
 };
 
-const collectLayoutEdges = (layoutNode, edges) => {
-  if (layoutNode.edges?.length) edges.push(...layoutNode.edges);
-  for (const child of layoutNode.children || []) collectLayoutEdges(child, edges);
+const offsetPoint = (point, x, y) => ({ x: point.x + x, y: point.y + y });
+
+const collectLayoutEdges = (layoutNode, offsetX, offsetY, edges) => {
+  const x = (layoutNode.x || 0) + offsetX;
+  const y = (layoutNode.y || 0) + offsetY;
+
+  for (const edge of layoutNode.edges || []) {
+    const sections = (edge.sections || []).map((sec) => ({
+      ...sec,
+      startPoint: offsetPoint(sec.startPoint, x, y),
+      endPoint: offsetPoint(sec.endPoint, x, y),
+      bendPoints: (sec.bendPoints || []).map((bp) => offsetPoint(bp, x, y))
+    }));
+    edges.push({ ...edge, sections });
+  }
+
+  for (const child of layoutNode.children || []) collectLayoutEdges(child, x, y, edges);
 };
 
 const render = async () => {
@@ -277,7 +291,7 @@ const render = async () => {
     const plates = [];
     const edges = [];
     collectLayoutNodes(layout, 0, 0, plateDimsById, byId, plates);
-    collectLayoutEdges(layout, edges);
+    collectLayoutEdges(layout, 0, 0, edges);
 
     const width = Math.max((layout.width || 800) + PADDING * 2, canvas.clientWidth);
     const height = Math.max((layout.height || 500) + PADDING * 2, canvas.clientHeight);
