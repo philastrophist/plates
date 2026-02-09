@@ -728,34 +728,33 @@ const render = async (pass = 0) => {
 
     if (window.MathJax?.typesetPromise) await window.MathJax.typesetPromise([nodeLayer]);
 
-    const nextSizeOverrides = new Map(view.nodeSizeOverrides);
-    let requiresRerender = false;
+    let maxNeededSide = 0;
     for (const n of model.nodes) {
       if (n.type === 'fixed') continue;
       const el = nodeLayer.querySelector(`.node[data-node-id="${n.id}"]`);
       if (!el) continue;
 
-      const currentSize = nodeSize(n);
-      const neededW = Math.ceil(el.scrollWidth + 18);
-      const neededH = Math.ceil(el.scrollHeight + 18);
-
-      if (n.type === 'latent' || n.type === 'observed') {
-        const nextSide = Math.max(currentSize.w, currentSize.h, neededW, neededH);
-        if (nextSide > currentSize.w + 1 || nextSide > currentSize.h + 1) {
-          nextSizeOverrides.set(n.id, { w: nextSide, h: nextSide });
-          requiresRerender = true;
-        }
-      } else {
-        const nextW = Math.max(currentSize.w, neededW);
-        const nextH = Math.max(currentSize.h, neededH);
-        if (nextW > currentSize.w + 1 || nextH > currentSize.h + 1) {
-          nextSizeOverrides.set(n.id, { w: nextW, h: nextH });
-          requiresRerender = true;
-        }
-      }
+      const neededW = Math.ceil(el.scrollWidth + 28);
+      const neededH = Math.ceil(el.scrollHeight + 28);
+      maxNeededSide = Math.max(maxNeededSide, neededW, neededH);
     }
 
-    if (requiresRerender && pass < 3) {
+    const currentGlobalSide = Math.max(...model.nodes
+      .filter((n) => n.type !== 'fixed')
+      .map((n) => {
+        const current = nodeSize(n);
+        return Math.max(current.w, current.h);
+      }), 0);
+
+    const nextGlobalSide = Math.max(currentGlobalSide, maxNeededSide);
+    const needsGlobalResize = nextGlobalSide > currentGlobalSide + 1;
+
+    if (needsGlobalResize && pass < 4) {
+      const nextSizeOverrides = new Map(view.nodeSizeOverrides);
+      for (const n of model.nodes) {
+        if (n.type === 'fixed') continue;
+        nextSizeOverrides.set(n.id, { w: nextGlobalSide, h: nextGlobalSide });
+      }
       view.nodeSizeOverrides = nextSizeOverrides;
       await render(pass + 1);
       return;
