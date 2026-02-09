@@ -41,7 +41,8 @@ const view = {
     offX: 0,
     offY: 0
   },
-  minimapDragging: false
+  minimapDragging: false,
+  nodeSizeOverrides: new Map()
 };
 
 const splitTopLevel = (raw, delimiter) => {
@@ -303,15 +304,21 @@ const applyDefaultNodeSymbols = (model) => {
   }
 };
 
-const nodeSize = (type) => {
+const baseNodeSize = (type) => {
   if (type === 'fixed') return { w: 28, h: 28 };
   if (type === 'deterministic') return { w: 150, h: 94 };
   return { w: NODE_W, h: NODE_H };
 };
 
+const nodeSize = (node, overrides = view.nodeSizeOverrides) => {
+  const override = overrides.get(node.id);
+  if (override) return override;
+  return baseNodeSize(node.type);
+};
+
 const plateIdForDims = (dims) => `plate:${dims.join('|')}`;
 
-const buildElkGraph = (model) => {
+const buildElkGraph = (model, overrides = view.nodeSizeOverrides) => {
   const root = {
     id: 'root',
     layoutOptions: {
@@ -356,7 +363,7 @@ const buildElkGraph = (model) => {
 
   for (const n of model.nodes) {
     const parent = ensurePlate(n.dims);
-    const { w, h } = nodeSize(n.type);
+    const { w, h } = nodeSize(n, overrides);
     parent.children.push({ id: n.id, width: w, height: h });
   }
 
@@ -558,7 +565,7 @@ const drawMinimap = () => {
   minimapSvg.appendChild(vr);
 };
 
-const render = async () => {
+const render = async (pass = 0) => {
   try {
     errorsEl.textContent = '';
     const model = parseDsl(dslInput.value);
@@ -667,12 +674,13 @@ const render = async () => {
     for (const n of model.nodes) {
       const p = byId.get(n.id);
       if (!p) continue;
-      const { w, h } = nodeSize(n.type);
+      const { w, h } = nodeSize(n);
 
       minimapNodes.push({ x: p.x + PADDING, y: p.y + PADDING, w, h, type: n.type });
 
       const el = document.createElement('div');
       el.className = `node node-${n.type}`;
+      el.dataset.nodeId = n.id;
       el.style.left = `${p.x + PADDING}px`;
       el.style.top = `${p.y + PADDING}px`;
       el.style.width = `${w}px`;
@@ -719,6 +727,39 @@ const render = async () => {
     };
 
     if (window.MathJax?.typesetPromise) await window.MathJax.typesetPromise([nodeLayer]);
+
+    const nextSizeOverrides = new Map(view.nodeSizeOverrides);
+    let requiresRerender = false;
+    for (const n of model.nodes) {
+      if (n.type === 'fixed') continue;
+      const el = nodeLayer.querySelector(`.node[data-node-id="${n.id}"]`);
+      if (!el) continue;
+
+      const currentSize = nodeSize(n);
+      const neededW = Math.ceil(el.scrollWidth + 18);
+      const neededH = Math.ceil(el.scrollHeight + 18);
+
+      if (n.type === 'latent' || n.type === 'observed') {
+        const nextSide = Math.max(currentSize.w, currentSize.h, neededW, neededH);
+        if (nextSide > currentSize.w + 1 || nextSide > currentSize.h + 1) {
+          nextSizeOverrides.set(n.id, { w: nextSide, h: nextSide });
+          requiresRerender = true;
+        }
+      } else {
+        const nextW = Math.max(currentSize.w, neededW);
+        const nextH = Math.max(currentSize.h, neededH);
+        if (nextW > currentSize.w + 1 || nextH > currentSize.h + 1) {
+          nextSizeOverrides.set(n.id, { w: nextW, h: nextH });
+          requiresRerender = true;
+        }
+      }
+    }
+
+    if (requiresRerender && pass < 3) {
+      view.nodeSizeOverrides = nextSizeOverrides;
+      await render(pass + 1);
+      return;
+    }
 
     if (!view.fittedOnce) {
       fitToWindow();
@@ -817,6 +858,7 @@ minimapSvg.addEventListener('pointercancel', stopMinimapDrag);
 
 dslInput.addEventListener('input', () => {
   view.fittedOnce = false;
+  view.nodeSizeOverrides = new Map();
   debounceRender();
 });
 window.addEventListener('resize', fitToWindow);
