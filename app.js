@@ -598,7 +598,7 @@ const render = async () => {
       rect.setAttribute('height', String(h));
       rect.setAttribute('fill', 'none');
       rect.setAttribute('stroke', '#475569');
-      rect.setAttribute('stroke-width', '4');
+      rect.setAttribute('stroke-width', '10');
       group.appendChild(rect);
 
       edgeLayer.appendChild(group);
