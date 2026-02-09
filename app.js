@@ -1,6 +1,6 @@
 const elk = new ELK();
-const NODE_W = 232;
-const NODE_H = 232;
+const NODE_W = 190;
+const NODE_H = 190;
 const PADDING = 20;
 
 const dslInput = document.getElementById('dsl');
@@ -305,7 +305,7 @@ const applyDefaultNodeSymbols = (model) => {
 
 const baseNodeSize = (type) => {
   if (type === 'fixed') return { w: 28, h: 28 };
-  if (type === 'deterministic') return { w: 232, h: 170 };
+  if (type === 'deterministic') return { w: 190, h: 140 };
   return { w: NODE_W, h: NODE_H };
 };
 
