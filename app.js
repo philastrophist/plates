@@ -735,8 +735,8 @@ const render = async () => {
         const mid = (low + high) / 2;
         el.style.setProperty('--node-font-scale', String(mid));
 
-        const availableW = Math.max(1, el.clientWidth);
-        const availableH = Math.max(1, el.clientHeight);
+        const availableW = Math.max(1, el.clientWidth - 6);
+        const availableH = Math.max(1, el.clientHeight - 6);
         const fits = el.scrollWidth <= availableW && el.scrollHeight <= availableH;
 
         if (fits) {
