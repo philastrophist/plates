@@ -727,21 +727,27 @@ const render = async () => {
       .filter((el) => !el.classList.contains('node-fixed'));
 
     for (const el of adjustableNodes) {
-      el.style.setProperty('--node-font-scale', '1');
-      for (let i = 0; i < 16; i += 1) {
-        const availableW = Math.max(1, el.clientWidth - 8);
-        const availableH = Math.max(1, el.clientHeight - 8);
-        const overflowW = el.scrollWidth - availableW;
-        const overflowH = el.scrollHeight - availableH;
-        if (overflowW <= 0 && overflowH <= 0) break;
+      let low = 0.18;
+      let high = 2.4;
+      let best = low;
 
-        const ratioW = availableW / Math.max(el.scrollWidth, 1);
-        const ratioH = availableH / Math.max(el.scrollHeight, 1);
-        const current = Number(el.style.getPropertyValue('--node-font-scale') || '1');
-        const next = Math.max(0.08, current * Math.min(ratioW, ratioH, 0.95));
-        if (Math.abs(next - current) < 0.01) break;
-        el.style.setProperty('--node-font-scale', String(next));
+      for (let i = 0; i < 14; i += 1) {
+        const mid = (low + high) / 2;
+        el.style.setProperty('--node-font-scale', String(mid));
+
+        const availableW = Math.max(1, el.clientWidth - 4);
+        const availableH = Math.max(1, el.clientHeight - 4);
+        const fits = el.scrollWidth <= availableW && el.scrollHeight <= availableH;
+
+        if (fits) {
+          best = mid;
+          low = mid;
+        } else {
+          high = mid;
+        }
       }
+
+      el.style.setProperty('--node-font-scale', String(best));
     }
 
 
