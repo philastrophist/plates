@@ -1,6 +1,6 @@
 const elk = new ELK();
-const NODE_W = 138;
-const NODE_H = 138;
+const NODE_W = 232;
+const NODE_H = 232;
 const PADDING = 20;
 
 const dslInput = document.getElementById('dsl');
@@ -305,7 +305,7 @@ const applyDefaultNodeSymbols = (model) => {
 
 const baseNodeSize = (type) => {
   if (type === 'fixed') return { w: 28, h: 28 };
-  if (type === 'deterministic') return { w: 150, h: 94 };
+  if (type === 'deterministic') return { w: 232, h: 170 };
   return { w: NODE_W, h: NODE_H };
 };
 
@@ -727,16 +727,16 @@ const render = async () => {
       .filter((el) => !el.classList.contains('node-fixed'));
 
     for (const el of adjustableNodes) {
-      let low = 0.18;
+      let low = 0;
       let high = 4;
-      let best = low;
+      let best = 0;
 
       for (let i = 0; i < 14; i += 1) {
         const mid = (low + high) / 2;
         el.style.setProperty('--node-font-scale', String(mid));
 
-        const availableW = Math.max(1, el.clientWidth - 3);
-        const availableH = Math.max(1, el.clientHeight - 3);
+        const availableW = Math.max(1, el.clientWidth);
+        const availableH = Math.max(1, el.clientHeight);
         const fits = el.scrollWidth <= availableW && el.scrollHeight <= availableH;
 
         if (fits) {
