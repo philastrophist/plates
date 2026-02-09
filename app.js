@@ -19,6 +19,12 @@ const minimapSvg = document.getElementById('minimap-svg');
 const minimapToggle = document.getElementById('minimap-toggle');
 
 const NODE_TYPES = new Set(['latent', 'observed', 'fixed', 'deterministic']);
+const GREEK_LETTER_NAMES = new Set([
+  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta',
+  'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'varpi', 'rho', 'varrho', 'sigma', 'varsigma',
+  'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega', 'Gamma', 'Delta', 'Theta', 'Lambda',
+  'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega'
+]);
 
 const view = {
   scale: 1,
@@ -165,10 +171,20 @@ const dimMathLabel = (dimName, dimLookup) => {
   return normalizeMathContent(d?.label || d?.symbol || dimName);
 };
 
+const mathifyBaseSymbol = (symbol) => (GREEK_LETTER_NAMES.has(symbol) ? `\\${symbol}` : symbol);
+
+const normalizeNodeSymbolInput = (symbol) => {
+  const normalized = normalizeMathContent(symbol || '').trim();
+  if (!normalized) return normalized;
+  if (/^[A-Za-z]+$/.test(normalized)) return mathifyBaseSymbol(normalized);
+  return normalized;
+};
+
 const defaultNodeSymbol = (ref, dimLookup) => {
-  if (!ref.dims.length) return ref.name;
+  const base = mathifyBaseSymbol(ref.name);
+  if (!ref.dims.length) return base;
   const dims = ref.dims.map((dimName) => dimMathLabel(dimName, dimLookup));
-  return `${ref.name}_{${dims.join(',')}}`;
+  return `${base}_{${dims.join(',')}}`;
 };
 
 const parseNodeDecl = (line) => {
@@ -188,7 +204,7 @@ const parseNodeDecl = (line) => {
   let autoSymbol = true;
   const symMatch = rest.match(/^\(([^)]*)\)/);
   if (symMatch) {
-    symbol = normalizeMathContent(symMatch[1].trim() || defaultNodeSymbol(ref));
+    symbol = normalizeNodeSymbolInput(symMatch[1].trim() || defaultNodeSymbol(ref));
     autoSymbol = false;
     rest = rest.slice(symMatch[0].length).trim();
   }
