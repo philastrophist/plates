@@ -41,8 +41,7 @@ const view = {
     offX: 0,
     offY: 0
   },
-  minimapDragging: false,
-  nodeSizeOverrides: new Map()
+  minimapDragging: false
 };
 
 const splitTopLevel = (raw, delimiter) => {
@@ -310,15 +309,11 @@ const baseNodeSize = (type) => {
   return { w: NODE_W, h: NODE_H };
 };
 
-const nodeSize = (node, overrides = view.nodeSizeOverrides) => {
-  const override = overrides.get(node.id);
-  if (override) return override;
-  return baseNodeSize(node.type);
-};
+const nodeSize = (node) => baseNodeSize(node.type);
 
 const plateIdForDims = (dims) => `plate:${dims.join('|')}`;
 
-const buildElkGraph = (model, overrides = view.nodeSizeOverrides) => {
+const buildElkGraph = (model) => {
   const root = {
     id: 'root',
     layoutOptions: {
@@ -363,7 +358,7 @@ const buildElkGraph = (model, overrides = view.nodeSizeOverrides) => {
 
   for (const n of model.nodes) {
     const parent = ensurePlate(n.dims);
-    const { w, h } = nodeSize(n, overrides);
+    const { w, h } = nodeSize(n);
     parent.children.push({ id: n.id, width: w, height: h });
   }
 
@@ -565,7 +560,7 @@ const drawMinimap = () => {
   minimapSvg.appendChild(vr);
 };
 
-const render = async (pass = 0) => {
+const render = async () => {
   try {
     errorsEl.textContent = '';
     const model = parseDsl(dslInput.value);
@@ -728,37 +723,27 @@ const render = async (pass = 0) => {
 
     if (window.MathJax?.typesetPromise) await window.MathJax.typesetPromise([nodeLayer]);
 
-    let maxNeededSide = 0;
-    for (const n of model.nodes) {
-      if (n.type === 'fixed') continue;
-      const el = nodeLayer.querySelector(`.node[data-node-id="${n.id}"]`);
-      if (!el) continue;
+    const adjustableNodes = [...nodeLayer.querySelectorAll('.node')]
+      .filter((el) => !el.classList.contains('node-fixed'));
 
-      const neededW = Math.ceil(el.scrollWidth + 28);
-      const neededH = Math.ceil(el.scrollHeight + 28);
-      maxNeededSide = Math.max(maxNeededSide, neededW, neededH);
-    }
+    for (const el of adjustableNodes) {
+      el.style.setProperty('--node-font-scale', '1');
+      for (let i = 0; i < 16; i += 1) {
+        const availableW = Math.max(1, el.clientWidth - 8);
+        const availableH = Math.max(1, el.clientHeight - 8);
+        const overflowW = el.scrollWidth - availableW;
+        const overflowH = el.scrollHeight - availableH;
+        if (overflowW <= 0 && overflowH <= 0) break;
 
-    const currentGlobalSide = Math.max(...model.nodes
-      .filter((n) => n.type !== 'fixed')
-      .map((n) => {
-        const current = nodeSize(n);
-        return Math.max(current.w, current.h);
-      }), 0);
-
-    const nextGlobalSide = Math.max(currentGlobalSide, maxNeededSide);
-    const needsGlobalResize = nextGlobalSide > currentGlobalSide + 1;
-
-    if (needsGlobalResize && pass < 4) {
-      const nextSizeOverrides = new Map(view.nodeSizeOverrides);
-      for (const n of model.nodes) {
-        if (n.type === 'fixed') continue;
-        nextSizeOverrides.set(n.id, { w: nextGlobalSide, h: nextGlobalSide });
+        const ratioW = availableW / Math.max(el.scrollWidth, 1);
+        const ratioH = availableH / Math.max(el.scrollHeight, 1);
+        const current = Number(el.style.getPropertyValue('--node-font-scale') || '1');
+        const next = Math.max(0.08, current * Math.min(ratioW, ratioH, 0.95));
+        if (Math.abs(next - current) < 0.01) break;
+        el.style.setProperty('--node-font-scale', String(next));
       }
-      view.nodeSizeOverrides = nextSizeOverrides;
-      await render(pass + 1);
-      return;
     }
+
 
     if (!view.fittedOnce) {
       fitToWindow();
@@ -857,7 +842,6 @@ minimapSvg.addEventListener('pointercancel', stopMinimapDrag);
 
 dslInput.addEventListener('input', () => {
   view.fittedOnce = false;
-  view.nodeSizeOverrides = new Map();
   debounceRender();
 });
 window.addEventListener('resize', fitToWindow);

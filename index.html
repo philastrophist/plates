@@ -65,6 +65,7 @@
       font-size: 13px;
       line-height: 1.2;
       pointer-events: none;
+      --node-font-scale: 1;
     }
     .node-latent,
     .node-observed {
@@ -104,10 +105,10 @@
       white-space: nowrap;
     }
 
-    .node-desc { font-size: 22px; margin-bottom: 6px; line-height: 1.1; }
-    .node-symbol { font-size: 38px; line-height: 1; }
-    .node-tilde { margin: 4px 0; font-weight: 700; }
-    .node-dist { font-size: 12px; }
+    .node-desc { font-size: calc(22px * var(--node-font-scale)); margin-bottom: calc(6px * var(--node-font-scale)); line-height: 1.1; }
+    .node-symbol { font-size: calc(38px * var(--node-font-scale)); line-height: 1; }
+    .node-tilde { margin: calc(4px * var(--node-font-scale)) 0; font-weight: 700; font-size: calc(24px * var(--node-font-scale)); line-height: 1; }
+    .node-dist { font-size: calc(18px * var(--node-font-scale)); line-height: 1.1; }
 
     .error { color: #b91c1c; white-space: pre-wrap; font-size: 12px; margin-top: 12px; }
     .title { margin: 0 0 8px; font-size: 18px; }
