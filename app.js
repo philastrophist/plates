@@ -728,7 +728,7 @@ const render = async () => {
 
     for (const el of adjustableNodes) {
       let low = 0.18;
-      let high = 2.4;
+      let high = 4;
       let best = low;
 
       for (let i = 0; i < 14; i += 1) {
